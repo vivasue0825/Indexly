@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indexly - Setting</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --accent: #38bdf8;
+            --danger: #f43f5e;
+            --border: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        /* Search Bar Placeholder */
+        .search-trigger {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            cursor: pointer;
+            color: var(--text-sub);
+            transition: border-color 0.2s;
+        }
+
+        .search-trigger:hover {
+            border-color: var(--accent);
+        }
+
+        /* List Management */
+        .list-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+
+        .setting-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 40px;
+        }
+
+        .setting-item {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+
+        .item-label .name {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .item-label .ticker {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+        }
+
+        /* Controls Group: Up/Down/Delete */
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            cursor: pointer;
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-btn:hover {
+            color: var(--text-main);
+        }
+
+        .action-btn.delete:hover {
+            color: var(--danger);
+        }
+
+        .action-btn:disabled {
+            color: #334155;
+            cursor: not-allowed;
+        }
+
+        /* Fixed Bottom Action */
+        .footer-action {
+            margin-top: auto;
+        }
+
+        .save-btn {
+            width: 100%;
+            background-color: var(--accent);
+            color: #0f172a;
+            border: none;
+            padding: 16px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .save-btn:active {
+            transform: scale(0.98);
+        }
+
+        .save-btn:disabled {
+            background-color: var(--border);
+            color: var(--text-sub);
+            cursor: not-allowed;
+        }
+
+        .limit-msg {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--danger);
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+        <header>
+            <button class="back-btn" onclick="location.href='index.html'">
+                <i data-lucide="chevron-left"></i>
+            </button>
+            <h2>Index Setting</h2>
+        </header>
+
+        <div class="search-trigger" onclick="goToSearch()">
+            <i data-lucide="search" size="20"></i>
+            <span>Add new index or ticker...</span>
+        </div>
+
+        <div class="list-info">
+            <span>My Portfolio</span>
+            <span id="counter">0 / 15</span>
+        </div>
+
+        <div id="setting-list" class="setting-list">
+            <!-- List items rendered here -->
+        </div>
+
+        <div class="footer-action">
+            <button id="save-btn" class="save-btn" onclick="saveChanges()">Save Changes</button>
+            <p id="limit-msg" class="limit-msg">Maximum 15 items reached.</p>
+        </div>
+    </div>
+
+    <script>
+        let currentIndices = [];
+
+        function init() {
+            const saved = localStorage.getItem('indexly_indices');
+            // Default values if nothing in storage
+            currentIndices = saved ? JSON.parse(saved) : [
+                { id: 1, name: "달러/원 환율", ticker: "USD/KRW" },
+                { id: 2, name: "엔/원 환율", ticker: "JPY/KRW" },
+                { id: 3, name: "국제 금", ticker: "GOLD" },
+                { id: 4, name: "국제 은", ticker: "SILVER" },
+                { id: 5, name: "국제 구리", ticker: "COPPER" }
+            ];
+            render();
+        }
+
+        function render() {
+            const listContainer = document.getElementById('setting-list');
+            const counter = document.getElementById('counter');
+            const limitMsg = document.getElementById('limit-msg');
+
+            listContainer.innerHTML = currentIndices.map((item, index) => `
+            <div class="setting-item">
+                <div class="item-label">
+                    <div class="name">${item.name}</div>
+                    <div class="ticker">${item.ticker}</div>
+                </div>
+                <div class="control-group">
+                    <button class="action-btn" onclick="moveItem(${index}, -1)" ${index === 0 ? 'disabled' : ''}>
+                        <i data-lucide="chevron-up" size="20"></i>
+                    </button>
+                    <button class="action-btn" onclick="moveItem(${index}, 1)" ${index === currentIndices.length - 1 ? 'disabled' : ''}>
+                        <i data-lucide="chevron-down" size="20"></i>
+                    </button>
+                    <button class="action-btn delete" onclick="removeItem(${index})">
+                        <i data-lucide="trash-2" size="18"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+            counter.innerText = `${currentIndices.length} / 15`;
+
+            if (currentIndices.length >= 15) {
+                limitMsg.style.display = 'block';
+            } else {
+                limitMsg.style.display = 'none';
+            }
+
+            lucide.createIcons();
+        }
+
+        // New: Move item up or down in the list
+        function moveItem(index, direction) {
+            const targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= currentIndices.length) return;
+
+            // Swap items
+            const temp = currentIndices[index];
+            currentIndices[index] = currentIndices[targetIndex];
+            currentIndices[targetIndex] = temp;
+
+            render();
+        }
+
+        function removeItem(index) {
+            currentIndices.splice(index, 1);
+            render();
+        }
+
+        function saveChanges() {
+            localStorage.setItem('indexly_indices', JSON.stringify(currentIndices));
+            location.href = 'index.html';
+        }
+
+        function goToSearch() {
+            if (currentIndices.length >= 15) return;
+            // Search page logic placeholder
+            console.log("Redirecting to search...");
+        }
+
+        window.onload = init;
+    </script>
+
+</body>
+
+</html>
