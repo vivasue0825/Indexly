@@ -5,7 +5,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Indexly - Home</title>
-  <!-- Lucide Icons for UI elements -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     :root {
@@ -29,13 +28,12 @@
     body {
       background-color: var(--bg-color);
       color: var(--text-main);
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: 'Inter', sans-serif;
       display: flex;
       justify-content: center;
       min-height: 100vh;
     }
 
-    /* Responsive Container: Max 600px for PC, Full for Mobile */
     .app-container {
       width: 100%;
       max-width: 600px;
@@ -44,7 +42,6 @@
       flex-direction: column;
     }
 
-    /* HEADER SECTION */
     header {
       display: flex;
       justify-content: space-between;
@@ -65,18 +62,6 @@
       font-weight: 700;
     }
 
-    .nickname-input {
-      background: var(--card-bg);
-      border: 1px solid var(--accent);
-      color: var(--text-main);
-      font-size: 1.25rem;
-      font-weight: 700;
-      padding: 4px 8px;
-      border-radius: 4px;
-      outline: none;
-      width: 150px;
-    }
-
     .icon-btn {
       background: none;
       border: none;
@@ -85,14 +70,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: color 0.2s;
     }
 
-    .icon-btn:hover {
-      color: var(--text-main);
-    }
-
-    /* MARKET SECTION */
     .section-header {
       font-size: 0.8rem;
       font-weight: 800;
@@ -102,7 +81,6 @@
       text-transform: uppercase;
     }
 
-    /* INDEX LIST */
     #index-list {
       display: flex;
       flex-direction: column;
@@ -117,19 +95,11 @@
       display: grid;
       grid-template-columns: 1.5fr 1fr 1fr;
       align-items: center;
-      transition: transform 0.1s, border-color 0.2s;
-      cursor: pointer;
-    }
-
-    .index-card:active {
-      transform: scale(0.98);
-      border-color: var(--accent);
     }
 
     .name-info .name {
       font-size: 1rem;
       font-weight: 600;
-      margin-bottom: 2px;
     }
 
     .name-info .ticker {
@@ -139,7 +109,6 @@
 
     .price-info {
       text-align: right;
-      font-family: 'Roboto Mono', monospace;
       font-weight: 700;
       font-size: 1.05rem;
     }
@@ -163,13 +132,6 @@
     .even {
       color: var(--text-sub);
     }
-
-    /* Skeleton Animation Placeholder */
-    .loading-text {
-      text-align: center;
-      color: var(--text-sub);
-      padding: 40px;
-    }
   </style>
 </head>
 
@@ -177,87 +139,53 @@
 
   <div class="app-container">
     <header>
-      <div class="nickname-container" id="nickname-box">
-        <span id="greeting">Hi, </span>
-        <span id="nickname-display" class="nickname-text"></span>
-        <input type="text" id="nickname-edit" class="nickname-input" style="display: none;">
-        <i data-lucide="pencil" size="16" class="icon-btn"></i>
+      <div class="nickname-container">
+        <span class="nickname-text" id="nickname-display">Hi, Indexly</span>
       </div>
-      <button class="icon-btn" onclick="goToSetting()">
+      <button class="icon-btn" onclick="location.href='setting.html'">
         <i data-lucide="settings"></i>
       </button>
     </header>
 
     <div class="section-header">Market Overview</div>
-
-    <div id="index-list">
-      <!-- 리스트가 여기에 렌더링됩니다 -->
-    </div>
+    <div id="index-list"></div>
   </div>
 
   <script>
-    // 1. 초기 데이터 및 로직 정의 (기능정의서 준수)
-    const DEFAULT_INDICES = [
-      { id: 1, name: "달러/원 환율", ticker: "USD/KRW", price: 1324.50, diff: 4.20, percent: 0.32, state: "up" },
-      { id: 2, name: "엔/원 환율", ticker: "JPY/KRW", price: 882.10, diff: -1.50, percent: -0.17, state: "down" },
-      { id: 3, name: "국제 금", ticker: "GOLD (GC=F)", price: 2150.30, diff: 12.80, percent: 0.60, state: "up" },
-      { id: 4, name: "국제 은", ticker: "SILVER (SI=F)", price: 24.15, diff: -0.05, percent: -0.21, state: "down" },
-      { id: 5, name: "국제 구리", ticker: "COPPER (HG=F)", price: 3.85, diff: 0.00, percent: 0.00, state: "even" }
-    ];
+    // 1. 데이터 가져오기 (localStorage 우선)
+    function getIndices() {
+      const saved = localStorage.getItem('indexly_indices');
+      const defaultData = [
+        { id: 1, name: "달러/원 환율", ticker: "USD/KRW", price: 1324.50, diff: 4.20, percent: 0.32, state: "up" },
+        { id: 2, name: "엔/원 환율", ticker: "JPY/KRW", price: 882.10, diff: -1.50, percent: -0.17, state: "down" },
+        { id: 3, name: "국제 금", ticker: "GOLD", price: 2150.30, diff: 12.80, percent: 0.60, state: "up" },
+        { id: 4, name: "국제 은", ticker: "SILVER", price: 24.15, diff: -0.05, percent: -0.21, state: "down" }
+      ];
 
-    // 2. 닉네임 관리 로직
-    const nicknameDisplay = document.getElementById('nickname-display');
-    const nicknameEdit = document.getElementById('nickname-edit');
-    const nicknameBox = document.getElementById('nickname-box');
-
-    function initNickname() {
-      let savedName = localStorage.getItem('indexly_nickname');
-      if (!savedName) {
-        // 랜덤 닉네임 생성 (Indexly_ + 4자리 숫자)
-        savedName = `Indexly_${Math.floor(1000 + Math.random() * 9000)}`;
-        localStorage.setItem('indexly_nickname', savedName);
+      if (!saved) {
+        localStorage.setItem('indexly_indices', JSON.stringify(defaultData));
+        return defaultData;
       }
-      nicknameDisplay.innerText = savedName;
+
+      const savedList = JSON.parse(saved);
+      // 저장된 리스트 순서에 맞춰서 더미 시세 데이터 매칭
+      return savedList.map(item => {
+        const mock = defaultData.find(d => d.ticker === item.ticker) || { price: 100.0, diff: 0, percent: 0, state: "even" };
+        return { ...item, ...mock };
+      });
     }
 
-    // 닉네임 수정 기능 (Inline Edit)
-    nicknameBox.addEventListener('click', (e) => {
-      if (nicknameEdit.style.display === 'none') {
-        nicknameEdit.value = nicknameDisplay.innerText;
-        nicknameDisplay.style.display = 'none';
-        nicknameEdit.style.display = 'block';
-        nicknameEdit.focus();
-      }
-    });
-
-    function saveNickname() {
-      let newName = nicknameEdit.value.trim();
-      if (newName.length > 0) {
-        if (newName.length > 10) newName = newName.substring(0, 10); // 10자 제한
-        localStorage.setItem('indexly_nickname', newName);
-        nicknameDisplay.innerText = newName;
-      }
-      nicknameDisplay.style.display = 'block';
-      nicknameEdit.style.display = 'none';
-    }
-
-    nicknameEdit.addEventListener('blur', saveNickname);
-    nicknameEdit.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') saveNickname();
-    });
-
-    // 3. 리스트 렌더링 로직 (부분 렌더링 구조)
-    function renderList() {
-      const listContainer = document.getElementById('index-list');
-      listContainer.innerHTML = DEFAULT_INDICES.map(item => `
-            <div class="index-card" onclick="goToChart('${item.ticker}')">
+    // 2. 화면 렌더링
+    function renderHome() {
+      const list = getIndices();
+      const container = document.getElementById('index-list');
+      container.innerHTML = list.map(item => `
+            <div class="index-card">
                 <div class="name-info">
                     <div class="name">${item.name}</div>
                     <div class="ticker">${item.ticker}</div>
                 </div>
-                <div class="price-info">
-                    ${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </div>
+                <div class="price-info">${item.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 <div class="change-info ${item.state}">
                     <span>${item.state === 'up' ? '▲' : item.state === 'down' ? '▼' : '-'} ${Math.abs(item.diff).toFixed(2)}</span>
                     <span>(${item.percent > 0 ? '+' : ''}${item.percent.toFixed(2)}%)</span>
@@ -266,25 +194,20 @@
         `).join('');
     }
 
-    // 네비게이션 플레이스홀더
-    function goToSetting() {
-      console.log("Move to Setting Page");
-      // location.href = 'setting.html'; // 2단계에서 구현
+    // 3. 닉네임 로드
+    function loadNickname() {
+      const savedName = localStorage.getItem('indexly_nickname');
+      if (savedName) {
+        document.getElementById('nickname-display').innerText = `Hi, ${savedName}`;
+      }
     }
 
-    function goToChart(ticker) {
-      console.log(`Move to Chart View: ${ticker}`);
-      // location.href = `chart.html?id=${ticker}`; // 3단계에서 구현
-    }
-
-    // 초기화 실행
     window.onload = () => {
-      initNickname();
-      renderList();
-      lucide.createIcons(); // 아이콘 생성
+      loadNickname();
+      renderHome();
+      lucide.createIcons();
     };
   </script>
-
 </body>
 
 </html>
