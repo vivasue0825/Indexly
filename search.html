@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indexly - Search</title>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --accent: #38bdf8;
+            --added: #10b981;
+            --border: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* setting.html과 100% 동일한 헤더 스타일 */
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            padding: 0;
+            transition: color 0.2s;
+        }
+
+        .back-btn:hover {
+            color: var(--text-main);
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        /* Search Input Area */
+        .search-input-wrapper {
+            position: relative;
+            margin-bottom: 24px;
+            display: flex;
+            /* 요소 정렬 안정화 */
+            align-items: center;
+        }
+
+        /* [수정] i 태그가 svg로 변해도 스타일이 유지되도록 속성 선택자 사용 */
+        .search-input-wrapper [data-lucide="search"] {
+            position: absolute;
+            left: 16px;
+            color: var(--text-sub);
+            pointer-events: none;
+            /* 아이콘 클릭 방해 금지 */
+            z-index: 10;
+        }
+
+        .search-input {
+            width: 100%;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 14px 14px 48px;
+            /* 아이콘 공간 확보 */
+            color: var(--text-main);
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent);
+        }
+
+        /* Results List */
+        .results-header {
+            font-size: 0.8rem;
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .results-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .result-item {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .result-item:active {
+            background-color: #2d3748;
+        }
+
+        .result-item.exists {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        .item-info .name {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .item-info .ticker {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+        }
+
+        .status-tag {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: var(--added);
+            text-transform: uppercase;
+        }
+
+        .no-results {
+            text-align: center;
+            color: var(--text-sub);
+            margin-top: 40px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+        <header>
+            <button class="back-btn" onclick="location.href='setting.html'">
+                <i data-lucide="chevron-left"></i>
+            </button>
+            <h2>Search Index</h2>
+        </header>
+
+        <div class="search-input-wrapper">
+            <!-- 아이콘을 감싸는 wrapper 스타일 덕분에 input 내부로 들어갑니다 -->
+            <i data-lucide="search" size="20"></i>
+            <input type="text" id="search-input" class="search-input" placeholder="이름 또는 티커 입력..." autofocus>
+        </div>
+
+        <div id="results-area">
+            <div class="results-header">Search Results</div>
+            <div id="results-list" class="results-list">
+                <!-- 결과 렌더링 영역 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MASTER_DATA = [
+            { name: "달러/원 환율", ticker: "USD/KRW" },
+            { name: "엔/원 환율", ticker: "JPY/KRW" },
+            { name: "국제 금", ticker: "GOLD" },
+            { name: "국제 은", ticker: "SILVER" },
+            { name: "국제 구리", ticker: "COPPER" },
+            { name: "나스닥 100", ticker: "NASDAQ100" },
+            { name: "S&P 500", ticker: "S&P500" },
+            { name: "비트코인", ticker: "BTC/USD" },
+            { name: "이더리움", ticker: "ETH/USD" },
+            { name: "테슬라", ticker: "TSLA" },
+            { name: "애플", ticker: "AAPL" },
+            { name: "엔비디아", ticker: "NVDA" },
+            { name: "마이크로소프트", ticker: "MSFT" },
+            { name: "원유 (WTI)", ticker: "WTI" },
+            { name: "천연가스", ticker: "NATGAS" }
+        ];
+
+        let myIndices = [];
+        const searchInput = document.getElementById('search-input');
+        const resultsList = document.getElementById('results-list');
+
+        function init() {
+            const saved = localStorage.getItem('indexly_indices');
+            myIndices = saved ? JSON.parse(saved) : [];
+            renderResults("");
+
+            searchInput.addEventListener('input', (e) => {
+                renderResults(e.target.value.trim());
+            });
+
+            lucide.createIcons();
+        }
+
+        function renderResults(query) {
+            const filtered = MASTER_DATA.filter(item =>
+                item.name.toLowerCase().includes(query.toLowerCase()) ||
+                item.ticker.toLowerCase().includes(query.toLowerCase())
+            );
+
+            if (filtered.length === 0) {
+                resultsList.innerHTML = `<div class="no-results">검색 결과가 없습니다.</div>`;
+                return;
+            }
+
+            resultsList.innerHTML = filtered.map(item => {
+                const alreadyExists = myIndices.some(my => my.ticker === item.ticker);
+                return `
+                    <div class="result-item ${alreadyExists ? 'exists' : ''}" 
+                         onclick="${alreadyExists ? '' : `addItem('${item.name}', '${item.ticker}')`}">
+                        <div class="item-info">
+                            <div class="name">${item.name}</div>
+                            <div class="ticker">${item.ticker}</div>
+                        </div>
+                        ${alreadyExists ?
+                        '<span class="status-tag">Added</span>' :
+                        '<i data-lucide="plus" size="18" style="color: var(--accent)"></i>'}
+                    </div>
+                `;
+            }).join('');
+
+            lucide.createIcons();
+        }
+
+        function addItem(name, ticker) {
+            if (myIndices.length >= 15) {
+                alert("최대 15개까지만 등록할 수 있습니다.");
+                return;
+            }
+            const newItem = { id: Date.now(), name, ticker };
+            myIndices.push(newItem);
+            localStorage.setItem('indexly_indices', JSON.stringify(myIndices));
+            location.href = 'setting.html';
+        }
+
+        window.onload = init;
+    </script>
+</body>
+
+</html>

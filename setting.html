@@ -296,9 +296,14 @@
         }
 
         function goToSearch() {
-            if (currentIndices.length >= 15) return;
-            // Search page logic placeholder
-            console.log("Redirecting to search...");
+            // 엣지 케이스 처리: 15개가 꽉 찼다면 이동을 막고 경고를 줍니다.
+            if (currentIndices.length >= 15) {
+                alert("최대 15개까지만 등록할 수 있습니다. 기존 종목을 삭제해 주세요.");
+                return;
+            }
+
+            // 파일 이름이 search.html인 페이지로 이동합니다.
+            location.href = 'search.html';
         }
 
         window.onload = init;
