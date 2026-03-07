@@ -1,12 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
-import uvicorn
 from datetime import datetime
+import uvicorn
+import pytz
 
 app = FastAPI()
 
-# 프론트엔드 연결 허용
+# Antigravity 환경을 위한 CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,67 +15,90 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/api/chart/{ticker}")
-async def get_market_data(ticker: str, period: str = "1d"):
+def check_market_open(ticker: str):
     """
-    Yahoo Finance API를 통해 실시간 OHLC 데이터를 가져옵니다.
+    종목별 시장 운영 여부를 판단합니다. (KST 및 글로벌 기준)
+    """
+    kst = pytz.timezone('Asia/Seoul')
+    now_kst = datetime.now(kst)
+    
+    # 1. 암호화폐 (BTC, ETH 등) -> 24시간/365일 가동
+    if "BTC" in ticker or "ETH" in ticker or "/USD" in ticker:
+        return True
+    
+    # 2. 한국 시장 (환율 및 국장: 주중 09:00 ~ 15:30)
+    if "KRW" in ticker or "KOSPI" in ticker:
+        if now_kst.weekday() >= 5: return False # 주말 종료
+        # 오전 9시부터 오후 3시 30분까지
+        start_time = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
+        end_time = now_kst.replace(hour=15, minute=30, second=0, microsecond=0)
+        return start_time <= now_kst <= end_time
+    
+    # 3. 미국 시장 등 기타 (간소화: 우선 평일이면 열린 것으로 처리)
+    return now_kst.weekday() < 5
+
+@app.get("/api/summary")
+async def get_summary():
+    """
+    홈 화면을 위한 실시간 시세 요약 (Mock/Real 데이터 결합)
     """
     try:
-        # 티커 변환 (예: USD/KRW -> USDKRW=X)
-        ticker_map = {
-            "USD/KRW": "USDKRW=X",
-            "JPY/KRW": "JPYKRW=X",
-            "GOLD": "GC=F",
-            "SILVER": "SI=F",
-            "NASDAQ100": "^NDX"
+        # 실제 환경에서는 DB나 실시간 API에서 루프를 돌며 가져옵니다.
+        # 여기서는 요건 확인을 위한 샘플 데이터를 반환합니다.
+        return [
+            {"name": "달러/원 환율", "ticker": "USD/KRW", "price": 1342.50, "diff": 5.2, "percent": 0.38, "state": "up"},
+            {"name": "나스닥 100", "ticker": "NASDAQ100", "price": 18234.15, "diff": -12.4, "percent": -0.07, "state": "down"},
+            {"name": "비트코인", "ticker": "BTC/USD", "price": 63450.00, "diff": 120.0, "percent": 0.19, "state": "up"}
+        ]
+    except Exception:
+        return []
+
+@app.get("/api/chart/{ticker}")
+async def get_market_data(ticker: str, period: str = "1d"):
+    try:
+        t_map = {
+            "USD/KRW": "USDKRW=X", 
+            "JPY/KRW": "JPYKRW=X", 
+            "GOLD": "GC=F", 
+            "NASDAQ100": "^NDX",
+            "BTC/USD": "BTC-USD"
         }
-        target = ticker_map.get(ticker, ticker)
+        target = t_map.get(ticker, ticker)
         stock = yf.Ticker(target)
         
-        # 1일 데이터는 15분 단위, 그 외는 1일 단위
         interval = "15m" if period == "1d" else "1d"
         hist = stock.history(period=period, interval=interval)
 
-        if hist.empty:
-            raise HTTPException(status_code=404, detail="Data not found")
+        if hist.empty: raise HTTPException(status_code=404)
 
-        # 캔들스틱용 데이터 (t: 시간, o: 시가, h: 고가, l: 저가, c: 종가)
-        candle_data = []
-        for index, row in hist.iterrows():
-            candle_data.append({
-                "x": index.isoformat(),
-                "o": round(row['Open'], 2),
-                "h": round(row['High'], 2),
-                "l": round(row['Low'], 2),
-                "c": round(row['Close'], 2)
-            })
-
-        # 단순 라인차트용 데이터 (기존 호환성)
         prices = hist['Close'].round(2).tolist()
         labels = [d.strftime('%H:%M' if period == "1d" else '%m/%d') for d in hist.index]
+        
+        # 캔들 데이터 생성 (t, o, h, l, c)
+        candles = []
+        for index, row in hist.iterrows():
+            candles.append({
+                "x": index.to_pydatetime().timestamp() * 1000,
+                "o": row['Open'], "h": row['High'], "l": row['Low'], "c": row['Close']
+            })
 
         # 1주일 평균가 (Price Watch용)
         week_hist = stock.history(period="1wk", interval="1d")
         avg_price = round(week_hist['Close'].mean(), 2) if not week_hist.empty else prices[-1]
 
-        curr = prices[-1]
-        prev = prices[0]
-        diff = round(curr - prev, 2)
-        pct = round((diff / prev) * 100, 2)
-
         return {
             "ticker": ticker,
-            "currentPrice": curr,
+            "currentPrice": prices[-1],
             "avgPrice": avg_price,
-            "diff": diff,
-            "percent": pct,
-            "state": "up" if diff >= 0 else "down",
+            "is_open": check_market_open(ticker),
+            "diff": round(prices[-1] - prices[0], 2),
+            "percent": round(((prices[-1] - prices[0]) / prices[0]) * 100, 2),
+            "state": "up" if prices[-1] >= prices[0] else "down",
             "labels": labels,
             "prices": prices,
-            "candles": candle_data # 캔들 전용 데이터셋 추가
+            "candles": candles
         }
     except Exception as e:
-        print(f"Error: {e}")
         return {"error": str(e)}
 
 if __name__ == "__main__":

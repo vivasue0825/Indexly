@@ -7,6 +7,12 @@
     <title>Indexly - Market Chart</title>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 캔들 차트 확장 라이브러리 (Financial Plugin & Date Adapter) -->
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     <style>
         :root {
             --bg-color: #0b0f19;
@@ -37,7 +43,7 @@
             overflow: hidden;
         }
 
-        /* 메인 차트 페이지 구성 */
+        /* 메인 페이지 레이아웃 */
         .chart-page {
             display: flex;
             flex-direction: column;
@@ -54,8 +60,25 @@
         }
 
         .chart-header h1 {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 장 상태 뱃지 */
+        .market-status {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #334155;
+            color: var(--text-dim);
+        }
+
+        .status-open {
+            background: rgba(38, 173, 141, 0.2);
+            color: var(--primary-green);
         }
 
         .price-hero {
@@ -63,7 +86,7 @@
         }
 
         .current-price {
-            font-size: 2.8rem;
+            font-size: 2.5rem;
             font-weight: 800;
             font-family: 'Roboto Mono', monospace;
         }
@@ -71,6 +94,7 @@
         .price-change {
             font-size: 1.1rem;
             font-weight: 600;
+            margin-top: 4px;
         }
 
         .up {
@@ -81,6 +105,7 @@
             color: var(--down-color);
         }
 
+        /* 컨트롤 영역 */
         .chart-controls {
             display: flex;
             justify-content: space-between;
@@ -105,6 +130,7 @@
             cursor: pointer;
             border: none;
             background: none;
+            transition: 0.2s;
         }
 
         .tab.active {
@@ -116,14 +142,13 @@
             background: var(--card-bg);
             color: var(--text-dim);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
             padding: 6px 10px;
-            font-size: 13px;
-            width: auto;
+            border-radius: 8px;
             outline: none;
-            cursor: pointer;
+            font-size: 13px;
         }
 
+        /* 차트 컨테이너 및 오버레이 */
         .chart-container {
             flex: 1;
             background: var(--card-bg);
@@ -131,28 +156,40 @@
             padding: 15px;
             border: 1px solid var(--border-color);
             position: relative;
+            overflow: hidden;
         }
 
-        .bell-icon-btn {
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: var(--text-dim);
-            transition: color 0.2s;
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: var(--card-bg);
+            z-index: 10;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
         }
 
-        .bell-icon-btn:hover {
-            color: var(--primary-blue);
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
 
-        /* --- Full Screen Alert Layer --- */
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 알림 설정 레이어 (Full Screen) */
         #alertLayer {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            inset: 0;
             background: var(--bg-color);
             z-index: 1000;
             display: none;
@@ -182,6 +219,7 @@
             flex: 1;
             overflow-y: auto;
             padding: 24px;
+            padding-bottom: 120px;
         }
 
         .section-title {
@@ -191,22 +229,21 @@
             margin: 24px 0 12px;
         }
 
-        .button-group {
+        .btn-group {
             display: flex;
             gap: 10px;
+            margin-bottom: 24px;
         }
 
         .state-btn {
             flex: 1;
             padding: 16px;
             border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-            background: transparent;
             border: 1.5px solid var(--primary-blue);
+            background: none;
             color: var(--primary-blue);
+            font-weight: 700;
+            cursor: pointer;
         }
 
         .state-btn.selected {
@@ -219,8 +256,8 @@
             background: var(--card-bg);
             border-radius: 16px;
             padding: 16px;
-            margin-bottom: 12px;
             border: 1px solid var(--border-color);
+            margin-bottom: 12px;
         }
 
         .input-row {
@@ -239,7 +276,7 @@
         }
 
         .input-wrapper input {
-            width: 80%;
+            width: 85%;
             padding: 12px;
             background: transparent;
             border: none;
@@ -255,46 +292,14 @@
             color: var(--text-dim);
         }
 
-        .predicted-price {
-            font-size: 0.85rem;
-            color: var(--text-dim);
-            margin-top: 8px;
-            padding-left: 4px;
-        }
-
-        .predicted-price b {
-            color: var(--text-main);
-            font-family: 'Roboto Mono', monospace;
-        }
-
-        select {
-            background: var(--input-bg);
-            color: white;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px;
-            width: 125px;
-        }
-
-        .policy-box {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 13px;
-            color: var(--text-dim);
-            line-height: 1.5;
-            margin-top: 20px;
-        }
-
         .bottom-action {
             padding: 20px;
-            padding-bottom: max(20px, env(safe-area-inset-bottom));
             background: var(--bg-color);
             border-top: 1px solid var(--border-color);
             flex-shrink: 0;
         }
 
-        .cta-button {
+        .cta-btn {
             width: 100%;
             padding: 18px;
             border-radius: 16px;
@@ -306,256 +311,219 @@
             transition: 0.3s;
         }
 
-        .cta-button.enabled {
+        .cta-btn.enabled {
             background: var(--primary-green);
             color: white;
-            box-shadow: 0 8px 20px rgba(34, 197, 94, 0.3);
             cursor: pointer;
+            box-shadow: 0 8px 20px rgba(38, 173, 141, 0.3);
         }
     </style>
 </head>
 
 <body>
-
     <div class="chart-page">
+        <!-- 헤더 영역 -->
         <div class="chart-header">
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display:flex; align-items:center; gap:12px;">
                 <button onclick="location.href='index.html'"
-                    style="background:none; border:none; color:var(--text-dim); cursor:pointer;">
-                    <i data-lucide="chevron-left"></i>
-                </button>
-                <h1 id="view-ticker">INDEX</h1>
+                    style="background:none; border:none; color:var(--text-dim); cursor:pointer;"><i
+                        data-lucide="chevron-left"></i></button>
+                <h1 id="ticker-display">INDEX <span id="status-badge" class="market-status">확인 중</span></h1>
             </div>
-            <button class="bell-icon-btn" onclick="toggleLayer(true)">
-                <i data-lucide="bell"></i>
-            </button>
+            <button onclick="toggleLayer(true)"
+                style="background:none; border:none; color:var(--text-dim); cursor:pointer;"><i
+                    data-lucide="bell"></i></button>
         </div>
 
+        <!-- 가격 대시보드 -->
         <section class="price-hero">
-            <div class="current-price" id="curr-val">0.00</div>
-            <div id="diff-ui" class="price-change">-- (--)</div>
+            <div class="current-price" id="price-val">---</div>
+            <div id="diff-area" class="price-change">-- (--)</div>
         </section>
 
+        <!-- 차트 컨트롤 -->
         <div class="chart-controls">
             <div class="tab-bar">
-                <button class="tab active" onclick="loadMarketData('1d', this)">1D</button>
-                <button class="tab" onclick="loadMarketData('1w', this)">1W</button>
-                <button class="tab" onclick="loadMarketData('1m', this)">1M</button>
-                <button class="tab" onclick="loadMarketData('1y', this)">1Y</button>
+                <button class="tab active" onclick="loadData('1d', this)">1D</button>
+                <button class="tab" onclick="loadData('1w', this)">1W</button>
+                <button class="tab" onclick="loadData('1m', this)">1M</button>
+                <button class="tab" onclick="loadData('1y', this)">1Y</button>
             </div>
-
-            <select class="chart-type-select" onchange="changeChartType(this.value)">
-                <option value="line" selected>Line</option>
-                <option value="candle">Candle</option>
+            <select id="chart-type" onchange="draw()" class="chart-type-select">
+                <option value="line" selected>Line View</option>
+                <option value="candlestick">Candle View</option>
             </select>
         </div>
 
+        <!-- 차트 영역 -->
         <div class="chart-container">
-            <canvas id="priceChart"></canvas>
+            <div id="load-overlay" class="overlay" style="display:flex;">
+                <div class="spinner"></div>
+            </div>
+            <div id="err-overlay" class="overlay">
+                <i data-lucide="alert-circle" style="color:var(--up-color)" size="32"></i>
+                <div style="color:var(--text-dim); font-size:0.9rem; text-align:center;">API Response
+                    Error<br><small>백엔드 연결을 확인해주세요.</small></div>
+            </div>
+            <canvas id="mainChart"></canvas>
         </div>
     </div>
 
-    <!-- Full Screen Alert Layer -->
+    <!-- 시세 알림 레이어 -->
     <div id="alertLayer">
         <div class="layer-header">
             <button onclick="toggleLayer(false)"
                 style="background:none; border:none; color:white; font-size:20px;">✕</button>
-            <h2 style="font-size:18px; margin:0;"><span id="modal-ticker">INDEX</span> Price Alert</h2>
+            <h2 style="font-size:18px;"><span id="modal-ticker">INDEX</span> Price Alert</h2>
             <div style="width:24px;"></div>
         </div>
-
         <div class="layer-content">
             <div class="section-title">1. 기준가 선택 (필수)</div>
-            <div class="button-group">
-                <button class="state-btn" onclick="selectBase(this, 'now')">현재가</button>
-                <button class="state-btn" onclick="selectBase(this, 'avg')">1주일 평균가</button>
+            <div class="btn-group">
+                <button class="state-btn selected" id="base-now" onclick="setBase('now')">현재가</button>
+                <button class="state-btn" id="base-avg" onclick="setBase('avg')">1주일 평균가</button>
             </div>
-
             <div class="section-title">2. 상승 알림 설정</div>
             <div class="input-card">
                 <div class="input-row">
-                    <div class="input-wrapper">
-                        <input type="number" id="upInput" placeholder="상승 % 입력" oninput="validateForm('up')">
-                        <span class="unit">%</span>
-                    </div>
-                    <select>
+                    <div class="input-wrapper"><input type="number" id="upInput" placeholder="상승 % 입력"
+                            oninput="validateForm('up')"><span class="unit">%</span></div>
+                    <select
+                        style="background:var(--input-bg); color:white; border:1px solid var(--border-color); padding:10px; border-radius:8px;">
                         <option>오늘까지</option>
-                        <option>이번주까지</option>
                     </select>
                 </div>
-                <div class="predicted-price">예상 시세: <b id="up-preview">--</b></div>
+                <div style="font-size:0.85rem; color:var(--text-dim); margin-top:8px;">예상 시세: <b id="up-preview"
+                        style="color:white;">--</b></div>
             </div>
-
             <div class="section-title">3. 하락 알림 설정</div>
             <div class="input-card">
                 <div class="input-row">
-                    <div class="input-wrapper">
-                        <input type="number" id="downInput" placeholder="하락 % 입력" oninput="validateForm('down')">
-                        <span class="unit">%</span>
-                    </div>
-                    <select>
+                    <div class="input-wrapper"><input type="number" id="downInput" placeholder="하락 % 입력"
+                            oninput="validateForm('down')"><span class="unit">%</span></div>
+                    <select
+                        style="background:var(--input-bg); color:white; border:1px solid var(--border-color); padding:10px; border-radius:8px;">
                         <option>오늘까지</option>
-                        <option>이번주까지</option>
                     </select>
                 </div>
-                <div class="predicted-price">예상 시세: <b id="down-preview">--</b></div>
+                <div style="font-size:0.85rem; color:var(--text-dim); margin-top:8px;">예상 시세: <b id="down-preview"
+                        style="color:white;">--</b></div>
             </div>
-
-            <div class="policy-box">
-                📌 알림 종료 정책 : 시세 도달 시 즉시 종료되며, 설정 기간 만료 시 또는 기간 내 미도달 시에도 자동 종료됩니다.
+            <div
+                style="background: rgba(255,255,255,0.05); padding:18px; border-radius:12px; font-size:13px; color:var(--text-dim); line-height:1.6; margin-top:20px;">
+                📌 <b>알림 종료 정책 :</b> 시세 도달 시 즉시 종료되며, 설정 기간 만료 시 또는 기간 내 미도달 시에도 자동 종료됩니다.
             </div>
         </div>
-
         <div class="bottom-action">
-            <button id="ctaBtn" class="cta-button" disabled onclick="handleFinalSubmit()">Set Price Watch</button>
+            <button id="ctaBtn" class="cta-btn" disabled onclick="alert('시세 알림이 등록되었습니다.'); toggleLayer(false);">Set
+                Price Watch</button>
         </div>
     </div>
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const ticker = urlParams.get('id') || 'USD/KRW';
-        let indexName = 'INDEX';
+        let chartInstance, currentData = null, selectedBase = 'now';
 
-        // localStorage에서 현재 ticker에 해당하는 name 찾아오기
-        const savedData = localStorage.getItem('indexly_indices');
-        if (savedData) {
-            const indices = JSON.parse(savedData);
-            const found = indices.find(item => item.ticker === ticker);
-            if (found) {
-                indexName = found.name;
-            }
-        }
-
-        let currentLivePrice = 0;
-        let weekAvgPrice = 0;
-        let selectedBaseType = null;
-        let isBaseSelected = false;
-        let chartContext;
-
-        async function loadMarketData(period = '1d', btn = null) {
+        async function loadData(period, btn) {
             if (btn) {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
             }
+            document.getElementById('load-overlay').style.display = 'flex';
+            document.getElementById('err-overlay').style.display = 'none';
+
             try {
-                // 백엔드 호출 (가정)
                 const res = await fetch(`http://localhost:8000/api/chart/${encodeURIComponent(ticker)}?period=${period}`);
-                const data = await res.json();
-                currentLivePrice = data.currentPrice;
-                weekAvgPrice = data.avgPrice || currentLivePrice * 0.985;
-
-                updateMainUI(data);
-                drawChart(data);
-            } catch (err) {
-                console.error("Data Fetch Error:", err);
-                // 더미 데이터 대응
-                currentLivePrice = 2500.50;
-                weekAvgPrice = 2480.20;
-                drawChart({ labels: ['09:00', '10:00', '11:00', '12:00'], prices: [2480, 2495, 2500, 2500.5] });
+                if (!res.ok) throw new Error();
+                currentData = await res.json();
+                updateUI(currentData);
+                draw();
+                document.getElementById('load-overlay').style.display = 'none';
+            } catch (e) {
+                document.getElementById('load-overlay').style.display = 'none';
+                document.getElementById('err-overlay').style.display = 'flex';
+                lucide.createIcons();
             }
         }
 
-        function updateMainUI(data) {
-            // 서버에서 title 우선 제공 시 사용, 없을 시 localStorage에서 찾은 indexName 사용
-            const displayName = data.name || indexName;
+        function updateUI(d) {
+            const badge = document.getElementById('status-badge');
+            badge.innerText = d.is_open ? '장 중' : '장 종료';
+            badge.className = `market-status ${d.is_open ? 'status-open' : ''}`;
 
-            document.getElementById('view-ticker').innerText = displayName;
-            document.getElementById('modal-ticker').innerText = displayName;
-            document.getElementById('curr-val').innerText = (data.currentPrice || currentLivePrice).toLocaleString(undefined, { minimumFractionDigits: 2 });
-
-            const diffUI = document.getElementById('diff-ui');
-            if (data.diff !== undefined) {
-                diffUI.innerText = `${data.diff >= 0 ? '▲' : '▼'} ${Math.abs(data.diff).toFixed(2)} (${data.percent}%)`;
-                diffUI.className = `price-change ${data.state}`;
-            }
+            document.getElementById('ticker-display').firstChild.textContent = d.ticker + ' ';
+            document.getElementById('modal-ticker').innerText = d.ticker;
+            document.getElementById('price-val').innerText = d.currentPrice.toLocaleString();
+            document.getElementById('diff-area').innerText = `${d.diff >= 0 ? '▲' : '▼'} ${Math.abs(d.diff).toFixed(2)} (${d.percent}%)`;
+            document.getElementById('diff-area').className = `price-change ${d.state}`;
         }
 
-        function drawChart(data) {
-            const canvas = document.getElementById('priceChart').getContext('2d');
-            if (chartContext) chartContext.destroy();
-            chartContext = new Chart(canvas, {
-                type: 'line',
-                data: { labels: data.labels || [], datasets: [{ data: data.prices || [], borderColor: '#3498db', borderWidth: 3, fill: false, tension: 0.4, pointRadius: 0 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: '#2d3748' } } } }
+        function draw() {
+            if (!currentData) return;
+            const type = document.getElementById('chart-type').value;
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            const isCandle = type === 'candlestick';
+            chartInstance = new Chart(ctx, {
+                type: isCandle ? 'candlestick' : 'line',
+                data: {
+                    labels: isCandle ? undefined : currentData.labels,
+                    datasets: [{
+                        label: ticker,
+                        data: isCandle ? currentData.candles : currentData.prices,
+                        borderColor: isCandle ? undefined : '#3498db',
+                        borderWidth: isCandle ? 1 : 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        color: isCandle ? { up: '#ef4444', down: '#3b82f6', unchanged: '#94a3b8' } : undefined
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { type: isCandle ? 'time' : 'category', display: false },
+                        y: { grid: { color: '#2d3748' }, ticks: { color: '#94a3b8' } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
             });
         }
 
-        // 차트 종류 변경
-        function changeChartType(type) {
-            console.log("Selected target chart type:", type);
-            // 캔들스틱 차트는 chartjs-chart-financial 등의 추가 플러그인이 필요하므로
-            // 추후 확장을 대비한 이벤트 핸들러만 우선 추가합니다.
+        function toggleLayer(s) { document.getElementById('alertLayer').style.display = s ? 'flex' : 'none'; if (s) lucide.createIcons(); }
+
+        function setBase(type) {
+            selectedBase = type;
+            document.getElementById('base-now').classList.toggle('selected', type === 'now');
+            document.getElementById('base-avg').classList.toggle('selected', type === 'avg');
+            validateForm();
         }
 
-        // 레이어 토글
-        function toggleLayer(show) {
-            const layer = document.getElementById('alertLayer');
-            layer.style.display = show ? 'flex' : 'none';
-            if (show) lucide.createIcons();
-        }
-
-        // 기준가 선택
-        function selectBase(btn, type) {
-            document.querySelectorAll('.state-btn').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            selectedBaseType = type;
-            isBaseSelected = true;
-            validateForm('up');
-            validateForm('down');
-        }
-
-        // 입력 제한 및 CTA 활성화 로직 + 예상 시세 계산
         function validateForm(mode) {
-            const upInput = document.getElementById('upInput');
-            const downInput = document.getElementById('downInput');
-            const ctaBtn = document.getElementById('ctaBtn');
-
-            // 1. 입력 범위 제한 (Max 999)
-            [upInput, downInput].forEach(input => {
-                if (input.value.length > 3) input.value = input.value.slice(0, 3);
-                if (parseInt(input.value) > 999) input.value = 999;
-            });
-
-            // 2. 예상 시세 계산
-            updatePreview(mode);
-
-            // 3. 활성화 조건: 기준가 선택 AND (상승 OR 하락 입력)
-            const hasInput = upInput.value.length > 0 || downInput.value.length > 0;
-
-            if (isBaseSelected && hasInput) {
-                ctaBtn.disabled = false;
-                ctaBtn.classList.add('enabled');
+            const up = document.getElementById('upInput').value;
+            const down = document.getElementById('downInput').value;
+            const cta = document.getElementById('ctaBtn');
+            if (up.length > 0 || down.length > 0) {
+                cta.disabled = false; cta.classList.add('enabled');
             } else {
-                ctaBtn.disabled = true;
-                ctaBtn.classList.remove('enabled');
+                cta.disabled = true; cta.classList.remove('enabled');
             }
+            if (mode) updatePreview(mode);
         }
 
         function updatePreview(mode) {
             const input = document.getElementById(mode === 'up' ? 'upInput' : 'downInput');
-            const previewEl = document.getElementById(mode === 'up' ? 'up-preview' : 'down-preview');
-
-            if (!input.value || !isBaseSelected) {
-                previewEl.innerText = '--';
-                return;
-            }
-
-            const base = selectedBaseType === 'now' ? currentLivePrice : weekAvgPrice;
-            const percent = parseFloat(input.value);
-            const calc = mode === 'up' ? base * (1 + percent / 100) : base * (1 - percent / 100);
-
-            previewEl.innerText = calc.toLocaleString(undefined, { minimumFractionDigits: 2 });
+            const preview = document.getElementById(mode === 'up' ? 'up-preview' : 'down-preview');
+            if (!input.value || !currentData) { preview.innerText = '--'; return; }
+            const base = selectedBase === 'now' ? currentData.currentPrice : currentData.avgPrice;
+            const pct = parseFloat(input.value);
+            const res = mode === 'up' ? base * (1 + pct / 100) : base * (1 - pct / 100);
+            preview.innerText = res.toLocaleString(undefined, { minimumFractionDigits: 2 });
         }
 
-        function handleFinalSubmit() {
-            alert("시세 알림이 정상적으로 등록되었습니다.");
-            toggleLayer(false);
-        }
-
-        window.onload = () => {
-            loadMarketData();
-            lucide.createIcons();
-        };
+        window.onload = () => { loadData('1d'); lucide.createIcons(); };
     </script>
 </body>
 
