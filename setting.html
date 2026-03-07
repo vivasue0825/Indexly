@@ -48,6 +48,26 @@
             margin-bottom: 30px;
         }
 
+        .search-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 24px;
+            padding-right: 8px;
+        }
+
+        .search-icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--accent);
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+        }
+
+
         .back-btn {
             background: none;
             border: none;
@@ -200,10 +220,17 @@
             <h2>Index Setting</h2>
         </header>
 
+        <div class="search-container">
+            <button class="search-icon-btn" onclick="goToSearch()">
+                <i data-lucide="search" size="32" stroke-width="2.5"></i>
+            </button>
+        </div>
+        <!-- 
         <div class="search-trigger" onclick="goToSearch()">
             <i data-lucide="search" size="20"></i>
-            <span>Add new index or ticker...</span>
+            <span>인덱스 or 티커 검색</span>
         </div>
+        -->
 
         <div class="list-info">
             <span>My Portfolio</span>

@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Indexly - Market Chart</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #1a222e;
+            --input-bg: #111827;
+            --primary-blue: #3498db;
+            --primary-green: #26AD8D;
+            --text-main: #ffffff;
+            --text-dim: #94a3b8;
+            --border-color: #2d3748;
+            --up-color: #ef4444;
+            --down-color: #3b82f6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body,
+        html {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* 메인 차트 페이지 구성 */
+        .chart-page {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .chart-header h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        .price-hero {
+            margin-bottom: 20px;
+        }
+
+        .current-price {
+            font-size: 2.8rem;
+            font-weight: 800;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .price-change {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .up {
+            color: var(--up-color);
+        }
+
+        .down {
+            color: var(--down-color);
+        }
+
+        .chart-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .tab-bar {
+            display: flex;
+            background: var(--card-bg);
+            padding: 4px;
+            border-radius: 12px;
+            gap: 2px;
+        }
+
+        .tab {
+            padding: 8px 14px;
+            border-radius: 9px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+
+        .tab.active {
+            background: var(--primary-blue);
+            color: white;
+        }
+
+        .chart-type-select {
+            background: var(--card-bg);
+            color: var(--text-dim);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 13px;
+            width: auto;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .chart-container {
+            flex: 1;
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            position: relative;
+        }
+
+        .bell-icon-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-dim);
+            transition: color 0.2s;
+        }
+
+        .bell-icon-btn:hover {
+            color: var(--primary-blue);
+        }
+
+        /* --- Full Screen Alert Layer --- */
+        #alertLayer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-color);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .layer-header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .layer-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .section-title {
+            color: #4db8ff;
+            font-size: 15px;
+            font-weight: 600;
+            margin: 24px 0 12px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .state-btn {
+            flex: 1;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            background: transparent;
+            border: 1.5px solid var(--primary-blue);
+            color: var(--primary-blue);
+        }
+
+        .state-btn.selected {
+            background: var(--primary-green);
+            border-color: var(--primary-green);
+            color: white;
+        }
+
+        .input-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+            background: var(--input-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .input-wrapper input {
+            width: 80%;
+            padding: 12px;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .unit {
+            position: absolute;
+            right: 12px;
+            top: 12px;
+            color: var(--text-dim);
+        }
+
+        .predicted-price {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-top: 8px;
+            padding-left: 4px;
+        }
+
+        .predicted-price b {
+            color: var(--text-main);
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        select {
+            background: var(--input-bg);
+            color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            width: 125px;
+        }
+
+        .policy-box {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 13px;
+            color: var(--text-dim);
+            line-height: 1.5;
+            margin-top: 20px;
+        }
+
+        .bottom-action {
+            padding: 20px;
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            background: var(--bg-color);
+            border-top: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .cta-button {
+            width: 100%;
+            padding: 18px;
+            border-radius: 16px;
+            border: none;
+            font-size: 17px;
+            font-weight: bold;
+            background: #2d3748;
+            color: #718096;
+            transition: 0.3s;
+        }
+
+        .cta-button.enabled {
+            background: var(--primary-green);
+            color: white;
+            box-shadow: 0 8px 20px rgba(34, 197, 94, 0.3);
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="chart-page">
+        <div class="chart-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button onclick="location.href='index.html'"
+                    style="background:none; border:none; color:var(--text-dim); cursor:pointer;">
+                    <i data-lucide="chevron-left"></i>
+                </button>
+                <h1 id="view-ticker">INDEX</h1>
+            </div>
+            <button class="bell-icon-btn" onclick="toggleLayer(true)">
+                <i data-lucide="bell"></i>
+            </button>
+        </div>
+
+        <section class="price-hero">
+            <div class="current-price" id="curr-val">0.00</div>
+            <div id="diff-ui" class="price-change">-- (--)</div>
+        </section>
+
+        <div class="chart-controls">
+            <div class="tab-bar">
+                <button class="tab active" onclick="loadMarketData('1d', this)">1D</button>
+                <button class="tab" onclick="loadMarketData('1w', this)">1W</button>
+                <button class="tab" onclick="loadMarketData('1m', this)">1M</button>
+                <button class="tab" onclick="loadMarketData('1y', this)">1Y</button>
+            </div>
+
+            <select class="chart-type-select" onchange="changeChartType(this.value)">
+                <option value="line" selected>Line</option>
+                <option value="candle">Candle</option>
+            </select>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="priceChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Full Screen Alert Layer -->
+    <div id="alertLayer">
+        <div class="layer-header">
+            <button onclick="toggleLayer(false)"
+                style="background:none; border:none; color:white; font-size:20px;">✕</button>
+            <h2 style="font-size:18px; margin:0;"><span id="modal-ticker">INDEX</span> Price Alert</h2>
+            <div style="width:24px;"></div>
+        </div>
+
+        <div class="layer-content">
+            <div class="section-title">1. 기준가 선택 (필수)</div>
+            <div class="button-group">
+                <button class="state-btn" onclick="selectBase(this, 'now')">현재가</button>
+                <button class="state-btn" onclick="selectBase(this, 'avg')">1주일 평균가</button>
+            </div>
+
+            <div class="section-title">2. 상승 알림 설정</div>
+            <div class="input-card">
+                <div class="input-row">
+                    <div class="input-wrapper">
+                        <input type="number" id="upInput" placeholder="상승 % 입력" oninput="validateForm('up')">
+                        <span class="unit">%</span>
+                    </div>
+                    <select>
+                        <option>오늘까지</option>
+                        <option>이번주까지</option>
+                    </select>
+                </div>
+                <div class="predicted-price">예상 시세: <b id="up-preview">--</b></div>
+            </div>
+
+            <div class="section-title">3. 하락 알림 설정</div>
+            <div class="input-card">
+                <div class="input-row">
+                    <div class="input-wrapper">
+                        <input type="number" id="downInput" placeholder="하락 % 입력" oninput="validateForm('down')">
+                        <span class="unit">%</span>
+                    </div>
+                    <select>
+                        <option>오늘까지</option>
+                        <option>이번주까지</option>
+                    </select>
+                </div>
+                <div class="predicted-price">예상 시세: <b id="down-preview">--</b></div>
+            </div>
+
+            <div class="policy-box">
+                📌 알림 종료 정책 : 시세 도달 시 즉시 종료되며, 설정 기간 만료 시 또는 기간 내 미도달 시에도 자동 종료됩니다.
+            </div>
+        </div>
+
+        <div class="bottom-action">
+            <button id="ctaBtn" class="cta-button" disabled onclick="handleFinalSubmit()">Set Price Watch</button>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const ticker = urlParams.get('id') || 'USD/KRW';
+        let indexName = 'INDEX';
+
+        // localStorage에서 현재 ticker에 해당하는 name 찾아오기
+        const savedData = localStorage.getItem('indexly_indices');
+        if (savedData) {
+            const indices = JSON.parse(savedData);
+            const found = indices.find(item => item.ticker === ticker);
+            if (found) {
+                indexName = found.name;
+            }
+        }
+
+        let currentLivePrice = 0;
+        let weekAvgPrice = 0;
+        let selectedBaseType = null;
+        let isBaseSelected = false;
+        let chartContext;
+
+        async function loadMarketData(period = '1d', btn = null) {
+            if (btn) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            try {
+                // 백엔드 호출 (가정)
+                const res = await fetch(`http://localhost:8000/api/chart/${encodeURIComponent(ticker)}?period=${period}`);
+                const data = await res.json();
+                currentLivePrice = data.currentPrice;
+                weekAvgPrice = data.avgPrice || currentLivePrice * 0.985;
+
+                updateMainUI(data);
+                drawChart(data);
+            } catch (err) {
+                console.error("Data Fetch Error:", err);
+                // 더미 데이터 대응
+                currentLivePrice = 2500.50;
+                weekAvgPrice = 2480.20;
+                drawChart({ labels: ['09:00', '10:00', '11:00', '12:00'], prices: [2480, 2495, 2500, 2500.5] });
+            }
+        }
+
+        function updateMainUI(data) {
+            // 서버에서 title 우선 제공 시 사용, 없을 시 localStorage에서 찾은 indexName 사용
+            const displayName = data.name || indexName;
+
+            document.getElementById('view-ticker').innerText = displayName;
+            document.getElementById('modal-ticker').innerText = displayName;
+            document.getElementById('curr-val').innerText = (data.currentPrice || currentLivePrice).toLocaleString(undefined, { minimumFractionDigits: 2 });
+
+            const diffUI = document.getElementById('diff-ui');
+            if (data.diff !== undefined) {
+                diffUI.innerText = `${data.diff >= 0 ? '▲' : '▼'} ${Math.abs(data.diff).toFixed(2)} (${data.percent}%)`;
+                diffUI.className = `price-change ${data.state}`;
+            }
+        }
+
+        function drawChart(data) {
+            const canvas = document.getElementById('priceChart').getContext('2d');
+            if (chartContext) chartContext.destroy();
+            chartContext = new Chart(canvas, {
+                type: 'line',
+                data: { labels: data.labels || [], datasets: [{ data: data.prices || [], borderColor: '#3498db', borderWidth: 3, fill: false, tension: 0.4, pointRadius: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: '#2d3748' } } } }
+            });
+        }
+
+        // 차트 종류 변경
+        function changeChartType(type) {
+            console.log("Selected target chart type:", type);
+            // 캔들스틱 차트는 chartjs-chart-financial 등의 추가 플러그인이 필요하므로
+            // 추후 확장을 대비한 이벤트 핸들러만 우선 추가합니다.
+        }
+
+        // 레이어 토글
+        function toggleLayer(show) {
+            const layer = document.getElementById('alertLayer');
+            layer.style.display = show ? 'flex' : 'none';
+            if (show) lucide.createIcons();
+        }
+
+        // 기준가 선택
+        function selectBase(btn, type) {
+            document.querySelectorAll('.state-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedBaseType = type;
+            isBaseSelected = true;
+            validateForm('up');
+            validateForm('down');
+        }
+
+        // 입력 제한 및 CTA 활성화 로직 + 예상 시세 계산
+        function validateForm(mode) {
+            const upInput = document.getElementById('upInput');
+            const downInput = document.getElementById('downInput');
+            const ctaBtn = document.getElementById('ctaBtn');
+
+            // 1. 입력 범위 제한 (Max 999)
+            [upInput, downInput].forEach(input => {
+                if (input.value.length > 3) input.value = input.value.slice(0, 3);
+                if (parseInt(input.value) > 999) input.value = 999;
+            });
+
+            // 2. 예상 시세 계산
+            updatePreview(mode);
+
+            // 3. 활성화 조건: 기준가 선택 AND (상승 OR 하락 입력)
+            const hasInput = upInput.value.length > 0 || downInput.value.length > 0;
+
+            if (isBaseSelected && hasInput) {
+                ctaBtn.disabled = false;
+                ctaBtn.classList.add('enabled');
+            } else {
+                ctaBtn.disabled = true;
+                ctaBtn.classList.remove('enabled');
+            }
+        }
+
+        function updatePreview(mode) {
+            const input = document.getElementById(mode === 'up' ? 'upInput' : 'downInput');
+            const previewEl = document.getElementById(mode === 'up' ? 'up-preview' : 'down-preview');
+
+            if (!input.value || !isBaseSelected) {
+                previewEl.innerText = '--';
+                return;
+            }
+
+            const base = selectedBaseType === 'now' ? currentLivePrice : weekAvgPrice;
+            const percent = parseFloat(input.value);
+            const calc = mode === 'up' ? base * (1 + percent / 100) : base * (1 - percent / 100);
+
+            previewEl.innerText = calc.toLocaleString(undefined, { minimumFractionDigits: 2 });
+        }
+
+        function handleFinalSubmit() {
+            alert("시세 알림이 정상적으로 등록되었습니다.");
+            toggleLayer(false);
+        }
+
+        window.onload = () => {
+            loadMarketData();
+            lucide.createIcons();
+        };
+    </script>
+</body>
+
+</html>
