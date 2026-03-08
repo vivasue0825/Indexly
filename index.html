@@ -119,7 +119,19 @@
 <body>
   <div class="app-container">
     <header>
-      <div class="nickname-text" id="nick-area">Hi, Indexly ✏️</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div class="nickname-text" id="nick-display-area" style="cursor:pointer;" title="닉네임 변경">Hi, Indexly ✏️</div>
+        <div id="nick-edit-area" style="display:none; align-items:center; gap:6px;">
+          <input type="text" id="nick-input" maxlength="16" placeholder="영숫자 16자까지"
+            style="background:var(--card-bg); color:white; border:1px solid var(--border-color); padding:6px 10px; border-radius:6px; outline:none; font-size:1.1rem; width:160px;">
+          <button id="nick-submit"
+            style="background:none; border:none; color:var(--up-color); cursor:pointer; display:flex; padding:0;"><i
+              data-lucide="check" size="20"></i></button>
+          <button id="nick-cancel"
+            style="background:none; border:none; color:var(--text-sub); cursor:pointer; display:flex; padding:0;"><i
+              data-lucide="x" size="20"></i></button>
+        </div>
+      </div>
       <button onclick="location.href='setting.html'"
         style="background:none; border:none; color:var(--text-sub); cursor:pointer;"><i
           data-lucide="settings"></i></button>
@@ -129,47 +141,153 @@
   </div>
   <script>
     async function init() {
-      const name = localStorage.getItem('indexly_nickname') || 'Indexly';
-      document.getElementById('nick-area').innerText = `Hi, ${name} ✏️`;
+      let currentNickname = 'Indexly';
+      try {
+        const nickRes = await fetch('http://localhost:8000/api/userconfig');
+        if (nickRes.ok) {
+          const nickData = await nickRes.json();
+          currentNickname = nickData.nickname;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      const nickDisplay = document.getElementById('nick-display-area');
+      const nickEdit = document.getElementById('nick-edit-area');
+      const nickInput = document.getElementById('nick-input');
+
+      nickDisplay.innerText = `Hi, ${currentNickname} ✏️`;
+
+      nickDisplay.onclick = () => {
+        nickDisplay.style.display = 'none';
+        nickEdit.style.display = 'flex';
+        nickInput.value = currentNickname;
+        nickInput.focus();
+      };
+
+      const closeEdit = () => {
+        nickEdit.style.display = 'none';
+        nickDisplay.style.display = 'block';
+      };
+
+      document.getElementById('nick-cancel').onclick = closeEdit;
+
+      document.getElementById('nick-submit').onclick = async () => {
+        const newName = nickInput.value.trim();
+        const regex = /^[a-zA-Z0-9]+$/;
+
+        if (!newName || newName.length > 16 || !regex.test(newName)) {
+          alert("영문과 숫자만 최대 16자까지 입력 가능합니다.");
+          return;
+        }
+
+        try {
+          await fetch('http://localhost:8000/api/userconfig', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nickname: newName })
+          });
+          currentNickname = newName;
+          nickDisplay.innerText = `Hi, ${currentNickname} ✏️`;
+          closeEdit();
+        } catch (e) {
+          alert("닉네임 변경에 실패했습니다.");
+        }
+      };
 
       // 기본 5개 종목 설정
       const defaultIndices = [
         { name: "달러/원 환율", ticker: "USD/KRW" },
         { name: "엔/원 환율", ticker: "JPY/KRW" },
-        { name: "나스닥 100", ticker: "NASDAQ100" },
         { name: "국제 금", ticker: "GOLD" },
-        { name: "국제 은", ticker: "SILVER" }
+        { name: "국제 은", ticker: "SILVER" },
+        { name: "국제 구리", ticker: "COPPER" }
       ];
 
+      let saved;
       try {
-        // 백엔드 DB 서버에서 데이터 가져오기
+        saved = JSON.parse(localStorage.getItem('indexly_indices'));
+      } catch (err) {
+        saved = null;
+      }
+      if (!saved || saved.length === 0) {
+        saved = defaultIndices;
+        localStorage.setItem('indexly_indices', JSON.stringify(saved));
+      }
+
+      try {
         const res = await fetch('http://localhost:8000/api/summary');
         if (!res.ok) throw new Error();
         const data = await res.json();
 
-        // 데이터가 비어있으면(DB 초기상태) 기본 리스트로 렌더링
-        if (data.length === 0) throw new Error("Empty data");
-        render(data);
+        const dbMap = {};
+        if (data && data.length > 0) {
+          data.forEach(d => dbMap[d.ticker] = d);
+        }
+
+        const mergedData = saved.map(item => {
+          const dbItem = dbMap[item.ticker];
+          return dbItem
+            ? { ...item, last_price: dbItem.last_price, diff: dbItem.diff, percent: dbItem.percent, offline: false }
+            : { ...item, last_price: 0, diff: 0, percent: 0, offline: true };
+        });
+
+        render(mergedData);
+
+        // Fetch missing data from Yahoo Finance via backend concurrently
+        const missingTickers = saved.filter(item => !dbMap[item.ticker]).map(item => item.ticker);
+        if (missingTickers.length > 0) {
+          const fetchPromises = missingTickers.map(async t => {
+            try {
+              const r = await fetch(`http://localhost:8000/api/chart/${encodeURIComponent(t)}?period=1d`);
+              if (r.ok) return await r.json();
+            } catch (e) { }
+            return null;
+          });
+          const results = await Promise.all(fetchPromises);
+
+          // Build map of newly fetched data directly from the responses
+          const newFetchedMap = {};
+          results.forEach(d => {
+            if (d && !d.error) newFetchedMap[d.ticker] = d;
+          });
+
+          const finalData = saved.map(item => {
+            const existingItem = dbMap[item.ticker];
+            const newlyFetched = newFetchedMap[item.ticker];
+            if (existingItem) {
+              return { ...item, last_price: existingItem.last_price, diff: existingItem.diff, percent: existingItem.percent, offline: false };
+            } else if (newlyFetched) {
+              return { ...item, last_price: newlyFetched.currentPrice, diff: newlyFetched.diff, percent: newlyFetched.percent, offline: false };
+            } else {
+              return { ...item, last_price: 0, diff: 0, percent: 0, offline: true };
+            }
+          });
+          render(finalData);
+        }
       } catch (e) {
-        // 서버 오프라인 또는 초기화 시 -- 표기 및 기본 5개 종목 출력
-        const saved = JSON.parse(localStorage.getItem('indexly_indices')) || defaultIndices;
         render(saved.map(i => ({ ...i, last_price: 0, diff: 0, percent: 0, offline: true })));
       }
     }
 
     function render(data) {
-      document.getElementById('index-list').innerHTML = data.map(item => `
+      document.getElementById('index-list').innerHTML = data.map(item => {
+        const lPrice = item.last_price || 0;
+        const pDiff = item.diff || 0;
+        const pct = item.percent || 0;
+        return `
                 <div class="index-card" onclick="location.href='chart.html?id=${encodeURIComponent(item.ticker)}'">
                     <div>
                         <div style="font-weight:600">${item.name || item.ticker}</div>
                         <div style="font-size:0.75rem; color:var(--text-sub)">Market Index</div>
                     </div>
-                    <div class="price-info ${item.offline ? 'offline' : ''}">${item.offline ? '--' : item.last_price.toLocaleString()}</div>
-                    <div class="change-info ${item.offline ? 'offline' : (item.percent >= 0 ? 'up' : 'down')}">
-                        <span>${item.offline ? '--' : (item.percent >= 0 ? '▲' : '▼') + ' ' + Math.abs(item.diff).toFixed(2)}</span>
-                        <span>${item.offline ? '' : '(' + (item.percent >= 0 ? '+' : '') + item.percent.toFixed(2) + '%)'}</span>
+                    <div class="price-info ${item.offline ? 'offline' : ''}">${item.offline ? '--' : lPrice.toLocaleString()}</div>
+                    <div class="change-info ${item.offline ? 'offline' : (pct >= 0 ? 'up' : 'down')}">
+                        <span>${item.offline ? '--' : (pct >= 0 ? '▲' : '▼') + ' ' + Math.abs(pDiff).toFixed(2)}</span>
+                        <span>${item.offline ? '' : '(' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%)'}</span>
                     </div>
-                </div>`).join('');
+                </div>`;
+      }).join('');
       lucide.createIcons();
     }
     window.onload = init;

@@ -13,6 +13,8 @@
         src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
     <script
         src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <style>
         :root {
             --bg-color: #0b0f19;
@@ -386,7 +388,7 @@
             <div class="section-title">2. 상승 알림 설정</div>
             <div class="input-card">
                 <div class="input-row">
-                    <div class="input-wrapper"><input type="number" id="upInput" placeholder="상승 % 입력"
+                    <div class="input-wrapper"><input type="number" id="upInput" placeholder="상승 % 입력" min="1" max="999"
                             oninput="validateForm('up')"><span class="unit">%</span></div>
                     <select
                         style="background:var(--input-bg); color:white; border:1px solid var(--border-color); padding:10px; border-radius:8px;">
@@ -399,8 +401,8 @@
             <div class="section-title">3. 하락 알림 설정</div>
             <div class="input-card">
                 <div class="input-row">
-                    <div class="input-wrapper"><input type="number" id="downInput" placeholder="하락 % 입력"
-                            oninput="validateForm('down')"><span class="unit">%</span></div>
+                    <div class="input-wrapper"><input type="number" id="downInput" placeholder="하락 % 입력" min="1"
+                            max="999" oninput="validateForm('down')"><span class="unit">%</span></div>
                     <select
                         style="background:var(--input-bg); color:white; border:1px solid var(--border-color); padding:10px; border-radius:8px;">
                         <option>오늘까지</option>
@@ -415,7 +417,7 @@
             </div>
         </div>
         <div class="bottom-action">
-            <button id="ctaBtn" class="cta-btn" disabled onclick="alert('시세 알림이 등록되었습니다.'); toggleLayer(false);">Set
+            <button id="ctaBtn" class="cta-btn" disabled onclick="saveAlert()">Set
                 Price Watch</button>
         </div>
     </div>
@@ -452,8 +454,6 @@
             badge.innerText = d.is_open ? '장 중' : '장 종료';
             badge.className = `market-status ${d.is_open ? 'status-open' : ''}`;
 
-            document.getElementById('ticker-display').firstChild.textContent = d.ticker + ' ';
-            document.getElementById('modal-ticker').innerText = d.ticker;
             document.getElementById('price-val').innerText = d.currentPrice.toLocaleString();
             document.getElementById('diff-area').innerText = `${d.diff >= 0 ? '▲' : '▼'} ${Math.abs(d.diff).toFixed(2)} (${d.percent}%)`;
             document.getElementById('diff-area').className = `price-change ${d.state}`;
@@ -466,6 +466,14 @@
             if (chartInstance) chartInstance.destroy();
 
             const isCandle = type === 'candlestick';
+
+            let minXRange = 6;
+            if (isCandle && currentData.candles && currentData.candles.length > 1) {
+                const timeDiff = currentData.candles[currentData.candles.length - 1].x - currentData.candles[0].x;
+                const avgInterval = timeDiff / (currentData.candles.length - 1);
+                minXRange = avgInterval * 6;
+            }
+
             chartInstance = new Chart(ctx, {
                 type: isCandle ? 'candlestick' : 'line',
                 data: {
@@ -484,10 +492,31 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { type: isCandle ? 'time' : 'category', display: false },
+                        x: {
+                            type: isCandle ? 'time' : 'category',
+                            display: true,
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8', maxTicksLimit: 7 }
+                        },
                         y: { grid: { color: '#2d3748' }, ticks: { color: '#94a3b8' } }
                     },
-                    plugins: { legend: { display: false } }
+                    plugins: {
+                        legend: { display: false },
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                            },
+                            zoom: {
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
+                                mode: 'x',
+                            },
+                            limits: {
+                                x: { minRange: minXRange }
+                            }
+                        }
+                    }
                 }
             });
         }
@@ -510,7 +539,12 @@
             } else {
                 cta.disabled = true; cta.classList.remove('enabled');
             }
-            if (mode) updatePreview(mode);
+            if (mode) {
+                updatePreview(mode);
+            } else {
+                updatePreview('up');
+                updatePreview('down');
+            }
         }
 
         function updatePreview(mode) {
@@ -518,12 +552,44 @@
             const preview = document.getElementById(mode === 'up' ? 'up-preview' : 'down-preview');
             if (!input.value || !currentData) { preview.innerText = '--'; return; }
             const base = selectedBase === 'now' ? currentData.currentPrice : currentData.avgPrice;
-            const pct = parseFloat(input.value);
+            const pct = Math.abs(parseFloat(input.value));
+            if (isNaN(pct)) { preview.innerText = '--'; return; }
             const res = mode === 'up' ? base * (1 + pct / 100) : base * (1 - pct / 100);
             preview.innerText = res.toLocaleString(undefined, { minimumFractionDigits: 2 });
         }
 
-        window.onload = () => { loadData('1d'); lucide.createIcons(); };
+        async function saveAlert() {
+            const up = document.getElementById('upInput').value;
+            const down = document.getElementById('downInput').value;
+
+            const payload = {
+                ticker: ticker,
+                base_type: selectedBase,
+                period: 'day'
+            };
+            if (up) payload.up_pct = Math.abs(parseFloat(up));
+            if (down) payload.down_pct = Math.abs(parseFloat(down));
+
+            try {
+                const res = await fetch('http://localhost:8000/api/alerts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error('API Error');
+                alert('시세 알림이 성공적으로 등록되었습니다.');
+                toggleLayer(false);
+            } catch (e) {
+                alert('알림 등록에 실패했습니다. 백엔드 연결을 확인해주세요.');
+            }
+        }
+
+        window.onload = () => {
+            document.getElementById('ticker-display').firstChild.textContent = ticker + ' ';
+            document.getElementById('modal-ticker').innerText = ticker;
+            loadData('1d');
+            lucide.createIcons();
+        };
     </script>
 </body>
 

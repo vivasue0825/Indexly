@@ -194,25 +194,11 @@
     </div>
 
     <script>
-        const MASTER_DATA = [
-            { name: "달러/원 환율", ticker: "USD/KRW" },
-            { name: "엔/원 환율", ticker: "JPY/KRW" },
-            { name: "국제 금", ticker: "GOLD" },
-            { name: "국제 은", ticker: "SILVER" },
-            { name: "국제 구리", ticker: "COPPER" },
-            { name: "나스닥 100", ticker: "NASDAQ100" },
-            { name: "S&P 500", ticker: "S&P500" },
-            { name: "테슬라", ticker: "TSLA" },
-            { name: "애플", ticker: "AAPL" },
-            { name: "엔비디아", ticker: "NVDA" },
-            { name: "마이크로소프트", ticker: "MSFT" },
-            { name: "원유 (WTI)", ticker: "WTI" },
-            { name: "천연가스", ticker: "NATGAS" }
-        ];
-
         let myIndices = [];
         const searchInput = document.getElementById('search-input');
         const resultsList = document.getElementById('results-list');
+
+        let debounceTimer;
 
         function init() {
             const saved = localStorage.getItem('indexly_indices');
@@ -220,17 +206,25 @@
             renderResults("");
 
             searchInput.addEventListener('input', (e) => {
-                renderResults(e.target.value.trim());
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    renderResults(e.target.value.trim());
+                }, 300);
             });
 
             lucide.createIcons();
         }
 
-        function renderResults(query) {
-            const filtered = MASTER_DATA.filter(item =>
-                item.name.toLowerCase().includes(query.toLowerCase()) ||
-                item.ticker.toLowerCase().includes(query.toLowerCase())
-            );
+        async function renderResults(query) {
+            let filtered = [];
+            try {
+                const res = await fetch(`http://localhost:8000/api/search?q=${encodeURIComponent(query)}`);
+                if (res.ok) {
+                    filtered = await res.json();
+                }
+            } catch (e) {
+                console.error("Search API Error", e);
+            }
 
             if (filtered.length === 0) {
                 resultsList.innerHTML = `<div class="no-results">검색 결과가 없습니다.</div>`;
