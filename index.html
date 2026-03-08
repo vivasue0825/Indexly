@@ -50,22 +50,9 @@
       padding: 10px 0;
     }
 
-    .nickname-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-    }
-
     .nickname-text {
       font-size: 1.25rem;
-      font-weight: 700;
-    }
-
-    .icon-btn {
-      background: none;
-      border: none;
-      color: var(--text-sub);
+      font-weight: 800;
       cursor: pointer;
     }
 
@@ -88,7 +75,7 @@
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 16px;
+      padding: 18px;
       display: grid;
       grid-template-columns: 1.5fr 1fr 1fr;
       align-items: center;
@@ -103,14 +90,15 @@
     .price-info {
       text-align: right;
       font-weight: 700;
-      font-size: 1.05rem;
+      font-size: 1.1rem;
+      font-family: 'Roboto Mono', monospace;
     }
 
     .change-info {
       text-align: right;
       display: flex;
       flex-direction: column;
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       font-weight: 600;
     }
 
@@ -124,7 +112,6 @@
 
     .offline {
       color: var(--text-sub);
-      font-weight: 400;
     }
   </style>
 </head>
@@ -132,9 +119,10 @@
 <body>
   <div class="app-container">
     <header>
-      <div class="nickname-container" onclick="location.href='index.html'"><span class="nickname-text"
-          id="nick-area">Hi, Indexly</span></div>
-      <button class="icon-btn" onclick="location.href='setting.html'"><i data-lucide="settings"></i></button>
+      <div class="nickname-text" id="nick-area">Hi, Indexly ✏️</div>
+      <button onclick="location.href='setting.html'"
+        style="background:none; border:none; color:var(--text-sub); cursor:pointer;"><i
+          data-lucide="settings"></i></button>
     </header>
     <div class="section-header">Market Overview</div>
     <div id="index-list"></div>
@@ -143,27 +131,45 @@
     async function init() {
       const name = localStorage.getItem('indexly_nickname') || 'Indexly';
       document.getElementById('nick-area').innerText = `Hi, ${name} ✏️`;
-      const saved = localStorage.getItem('indexly_indices');
-      let list = saved ? JSON.parse(saved) : [{ name: "달러/원 환율", ticker: "USD/KRW" }, { name: "나스닥 100", ticker: "NASDAQ100" }];
+
+      // 기본 5개 종목 설정
+      const defaultIndices = [
+        { name: "달러/원 환율", ticker: "USD/KRW" },
+        { name: "엔/원 환율", ticker: "JPY/KRW" },
+        { name: "나스닥 100", ticker: "NASDAQ100" },
+        { name: "국제 금", ticker: "GOLD" },
+        { name: "국제 은", ticker: "SILVER" }
+      ];
 
       try {
+        // 백엔드 DB 서버에서 데이터 가져오기
         const res = await fetch('http://localhost:8000/api/summary');
         if (!res.ok) throw new Error();
-        render(await res.json());
+        const data = await res.json();
+
+        // 데이터가 비어있으면(DB 초기상태) 기본 리스트로 렌더링
+        if (data.length === 0) throw new Error("Empty data");
+        render(data);
       } catch (e) {
-        // [예외 처리] 통신 불가 시 종목명은 유지하고 시세 정보는 -- 로 표기
-        render(list.map(i => ({ ...i, price: "--", diff: "--", percent: "--", state: "even" })));
+        // 서버 오프라인 또는 초기화 시 -- 표기 및 기본 5개 종목 출력
+        const saved = JSON.parse(localStorage.getItem('indexly_indices')) || defaultIndices;
+        render(saved.map(i => ({ ...i, last_price: 0, diff: 0, percent: 0, offline: true })));
       }
     }
+
     function render(data) {
       document.getElementById('index-list').innerHTML = data.map(item => `
-        <div class="index-card" onclick="location.href='chart.html?id=${encodeURIComponent(item.ticker)}'">
-          <div class="name-info"><div class="name" style="font-weight:600">${item.name}</div><div style="font-size:0.75rem; color:var(--text-sub)">${item.ticker}</div></div>
-          <div class="price-info ${item.price === '--' ? 'offline' : ''}">${item.price.toLocaleString()}</div>
-          <div class="change-info ${item.state}">
-            ${item.percent === '--' ? '--' : `<span>${item.state === 'up' ? '▲' : '▼'} ${Math.abs(item.diff).toFixed(2)}</span><span>(${item.percent > 0 ? '+' : ''}${item.percent.toFixed(2)}%)</span>`}
-          </div>
-        </div>`).join('');
+                <div class="index-card" onclick="location.href='chart.html?id=${encodeURIComponent(item.ticker)}'">
+                    <div>
+                        <div style="font-weight:600">${item.name || item.ticker}</div>
+                        <div style="font-size:0.75rem; color:var(--text-sub)">Market Index</div>
+                    </div>
+                    <div class="price-info ${item.offline ? 'offline' : ''}">${item.offline ? '--' : item.last_price.toLocaleString()}</div>
+                    <div class="change-info ${item.offline ? 'offline' : (item.percent >= 0 ? 'up' : 'down')}">
+                        <span>${item.offline ? '--' : (item.percent >= 0 ? '▲' : '▼') + ' ' + Math.abs(item.diff).toFixed(2)}</span>
+                        <span>${item.offline ? '' : '(' + (item.percent >= 0 ? '+' : '') + item.percent.toFixed(2) + '%)'}</span>
+                    </div>
+                </div>`).join('');
       lucide.createIcons();
     }
     window.onload = init;
